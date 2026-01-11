@@ -1,0 +1,66 @@
+<?php
+
+use App\Actions\Admin\Activity\ListActivityAction;
+use App\Actions\Admin\Permissions\ListPermissionsAction;
+use App\Actions\Admin\Roles\AssignPermissionsAction as AssignPermissionsToRoleAction;
+use App\Actions\Admin\Roles\DeleteRoleAction;
+use App\Actions\Admin\Roles\ListRolesAction;
+use App\Actions\Admin\Roles\ShowRoleAction;
+use App\Actions\Admin\Roles\StoreRoleAction;
+use App\Actions\Admin\Roles\UpdateRoleAction;
+use App\Actions\Admin\Users\AssignPermissionsAction as AssignPermissionsToUserAction;
+use App\Actions\Admin\Users\AssignRolesAction;
+use App\Actions\Admin\Users\DeleteUserAction;
+use App\Actions\Admin\Users\ListUsersAction;
+use App\Actions\Admin\Users\ShowUserAction;
+use App\Actions\Admin\Users\StoreUserAction;
+use App\Actions\Admin\Users\UpdateUserAction;
+use App\Actions\Auth\ForgotPasswordAction;
+use App\Actions\Auth\LoginAction;
+use App\Actions\Auth\LogoutAction;
+use App\Actions\Auth\MeAction;
+use App\Actions\Auth\RefreshTokenAction;
+use App\Actions\Auth\RegisterAction;
+use App\Actions\Auth\ResendVerificationAction;
+use App\Actions\Auth\ResetPasswordAction;
+use App\Actions\Auth\VerifyEmailAction;
+use Illuminate\Support\Facades\Route;
+
+// Auth routes
+Route::post('/auth/register', RegisterAction::class);
+Route::post('/auth/login', LoginAction::class);
+Route::post('/auth/logout', LogoutAction::class)->middleware('auth:api');
+Route::get('/auth/me', MeAction::class)->middleware('auth:api');
+Route::post('/auth/refresh', RefreshTokenAction::class)->middleware('auth:api');
+Route::get('/auth/verify-email/{id}/{hash}', VerifyEmailAction::class)->name('verification.verify');
+Route::post('/auth/resend-verification', ResendVerificationAction::class);
+Route::post('/auth/forgot-password', ForgotPasswordAction::class);
+Route::post('/auth/reset-password', ResetPasswordAction::class);
+
+// Admin routes (protected with permissions only - roles are just containers)
+Route::middleware(['auth:api', 'permission:users.view'])->group(function () {
+    Route::get('/admin/users', ListUsersAction::class);
+    Route::get('/admin/users/{user}', ShowUserAction::class);
+    Route::post('/admin/users', StoreUserAction::class)->middleware('permission:users.create');
+    Route::put('/admin/users/{user}', UpdateUserAction::class)->middleware('permission:users.update');
+    Route::delete('/admin/users/{user}', DeleteUserAction::class)->middleware('permission:users.delete');
+    Route::post('/admin/users/{user}/permissions', AssignPermissionsToUserAction::class)->middleware('permission:users.assign-permissions');
+    Route::post('/admin/users/{user}/roles', AssignRolesAction::class)->middleware('permission:users.assign-roles');
+});
+
+Route::middleware(['auth:api', 'permission:roles.view'])->group(function () {
+    Route::get('/admin/roles', ListRolesAction::class);
+    Route::get('/admin/roles/{role}', ShowRoleAction::class);
+    Route::post('/admin/roles', StoreRoleAction::class)->middleware('permission:roles.create');
+    Route::put('/admin/roles/{role}', UpdateRoleAction::class)->middleware('permission:roles.update');
+    Route::delete('/admin/roles/{role}', DeleteRoleAction::class)->middleware('permission:roles.delete');
+    Route::post('/admin/roles/{role}/permissions', AssignPermissionsToRoleAction::class)->middleware('permission:roles.assign-permissions');
+});
+
+Route::middleware(['auth:api', 'permission:permissions.view'])->group(function () {
+    Route::get('/admin/permissions', ListPermissionsAction::class);
+});
+
+Route::middleware(['auth:api', 'permission:activity.view'])->group(function () {
+    Route::get('/admin/activity', ListActivityAction::class);
+});
