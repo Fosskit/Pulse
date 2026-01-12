@@ -3,9 +3,10 @@ import type { User, LoginRequest, RegisterRequest, AuthResponse } from '~/types/
 export const useAuth = () => {
   const token = useCookie<string | null>('auth_token', {
     default: () => null,
-    secure: true,
-    sameSite: 'strict',
-    httpOnly: false
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    httpOnly: false,
+    maxAge: 60 * 60 * 24 * 7 // 7 days
   })
 
   const user = useState<User | null>('auth_user', () => null)
@@ -14,7 +15,8 @@ export const useAuth = () => {
   const api = useApi()
   const router = useRouter()
 
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  // Check authentication: token exists (user may be loading)
+  const isAuthenticated = computed(() => !!token.value)
 
   const login = async (credentials: LoginRequest): Promise<void> => {
     isLoading.value = true
@@ -89,14 +91,18 @@ export const useAuth = () => {
     }
   }
 
-  // Auto-fetch user on mount if token exists (client-side only)
-  onMounted(() => {
+  // Initialize: fetch user if token exists but user is not loaded
+  // This will be called by the auth plugin on app startup
+  const init = async () => {
     if (token.value && !user.value) {
-      fetchUser().catch(() => {
-        // Silently fail on initial load
-      })
+      try {
+        await fetchUser()
+      } catch (error) {
+        // Silently fail - token might be invalid
+        console.error('Failed to initialize auth:', error)
+      }
     }
-  })
+  }
 
   return {
     user: readonly(user),
@@ -107,6 +113,7 @@ export const useAuth = () => {
     register,
     logout,
     fetchUser,
-    refreshToken
+    refreshToken,
+    init
   }
 }
