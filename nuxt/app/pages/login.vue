@@ -42,9 +42,16 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
-const { handleSubmit, isSubmitting } = useForm({
+const { handleSubmit, isSubmitting, setValues } = useForm({
   validationSchema: toTypedSchema(loginSchema),
 })
+
+const autoFill = () => {
+  setValues({
+    email: 'admin@example.com',
+    password: 'password'
+  })
+}
 
 const onSubmit = handleSubmit(async (values) => {
   errorMessage.value = ''
@@ -64,10 +71,23 @@ const onSubmit = handleSubmit(async (values) => {
   <div class="flex min-h-screen items-center justify-center p-4">
     <Card class="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Login</CardTitle>
-        <CardDescription>
-          Enter your credentials to access your account
-        </CardDescription>
+        <div class="flex items-center justify-between">
+          <div>
+            <CardTitle>Login</CardTitle>
+            <CardDescription>
+              Enter your credentials to access your account
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            @click="autoFill"
+            class="text-xs"
+          >
+            Auto Fill
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <form @submit="onSubmit" class="space-y-4">
