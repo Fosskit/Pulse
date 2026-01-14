@@ -51,6 +51,7 @@ import {
   FormMessage,
 } from '~/components/ui/form'
 import { Badge } from '~/components/ui/badge'
+import { MultiSelect } from '~/components/ui/multi-select'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import type { User } from '~/types/auth'
 
@@ -65,6 +66,12 @@ const users = ref<User[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string>('')
 const successMessage = ref<string>('')
+
+// Roles and Permissions
+const availableRoles = ref<{ id: number; name: string }[]>([])
+const availablePermissions = ref<{ id: number; name: string }[]>([])
+const selectedRoles = ref<string[]>([])
+const selectedPermissions = ref<string[]>([])
 
 // Pagination
 const currentPage = ref(1)
@@ -102,6 +109,26 @@ const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
   validationSchema: computed(() => toTypedSchema(currentSchema.value)),
 })
 
+// Fetch roles
+const fetchRoles = async () => {
+  try {
+    const response = await api.get<{ data: { id: number; name: string }[] }>('/admin/roles')
+    availableRoles.value = response.data
+  } catch (error: any) {
+    console.error('Error fetching roles:', error)
+  }
+}
+
+// Fetch permissions
+const fetchPermissions = async () => {
+  try {
+    const response = await api.get<{ data: { id: number; name: string }[] }>('/admin/permissions')
+    availablePermissions.value = response.data
+  } catch (error: any) {
+    console.error('Error fetching permissions:', error)
+  }
+}
+
 // Fetch users
 const fetchUsers = async (page = 1) => {
   isLoading.value = true
@@ -134,15 +161,27 @@ const onCreateSubmit = handleSubmit(async (values) => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const response = await api.post('/admin/users', {
+    const payload: any = {
       name: values.name,
       email: values.email,
       password: values.password,
-    })
+    }
+
+    if (selectedRoles.value.length > 0) {
+      payload.roles = selectedRoles.value
+    }
+
+    if (selectedPermissions.value.length > 0) {
+      payload.permissions = selectedPermissions.value
+    }
+
+    const response = await api.post('/admin/users', payload)
     console.log('User created successfully:', response)
     successMessage.value = 'User created successfully'
     isCreateDialogOpen.value = false
     resetForm()
+    selectedRoles.value = []
+    selectedPermissions.value = []
     await fetchUsers(currentPage.value)
   } catch (error) {
     console.error('Error creating user:', error)
@@ -166,11 +205,21 @@ const onEditSubmit = handleSubmit(async (values) => {
       updateData.password = values.password
     }
 
+    if (selectedRoles.value.length > 0) {
+      updateData.roles = selectedRoles.value
+    }
+
+    if (selectedPermissions.value.length > 0) {
+      updateData.permissions = selectedPermissions.value
+    }
+
     await api.put(`/admin/users/${selectedUser.value.id}`, updateData)
     successMessage.value = 'User updated successfully'
     isEditDialogOpen.value = false
     selectedUser.value = null
     resetForm()
+    selectedRoles.value = []
+    selectedPermissions.value = []
     await fetchUsers(currentPage.value)
   } catch (error: any) {
     errorMessage.value = errorHandler.formatError(error)
@@ -197,6 +246,8 @@ const deleteUser = async () => {
 // Open create dialog
 const openCreateDialog = () => {
   resetForm()
+  selectedRoles.value = []
+  selectedPermissions.value = []
   errorMessage.value = ''
   successMessage.value = ''
   isCreateDialogOpen.value = true
@@ -210,6 +261,8 @@ const openEditDialog = (user: User) => {
     email: user.email,
     password: '',
   })
+  selectedRoles.value = user.roles?.map(role => role.name) || []
+  selectedPermissions.value = user.direct_permissions || []
   isEditDialogOpen.value = true
 }
 
@@ -219,9 +272,52 @@ const openDeleteDialog = (user: User) => {
   isDeleteDialogOpen.value = true
 }
 
+// Computed options for multi-select
+const roleOptions = computed(() =>
+  availableRoles.value.map(role => ({ label: role.name, value: role.name }))
+)
+
+const permissionOptions = computed(() =>
+  availablePermissions.value.map(permission => ({ label: permission.name, value: permission.name }))
+)
+
+// Group permissions by prefix (e.g., "users", "roles", "permissions")
+const groupedPermissions = computed(() => {
+  const groups: Record<string, { id: number; name: string }[]> = {}
+
+  availablePermissions.value.forEach(permission => {
+    const parts = permission.name.split('.')
+    const group = parts.length > 1 ? parts[0] : 'other'
+
+    if (!groups[group]) {
+      groups[group] = []
+    }
+    groups[group].push(permission)
+  })
+
+  return groups
+})
+
+// Toggle permission checkbox
+const togglePermission = (permissionName: string) => {
+  const index = selectedPermissions.value.indexOf(permissionName)
+  if (index === -1) {
+    selectedPermissions.value.push(permissionName)
+  } else {
+    selectedPermissions.value.splice(index, 1)
+  }
+}
+
+// Check if permission is selected
+const isPermissionSelected = (permissionName: string) => {
+  return selectedPermissions.value.includes(permissionName)
+}
+
 // Initialize
 onMounted(() => {
   fetchUsers()
+  fetchRoles()
+  fetchPermissions()
 })
 </script>
 
@@ -333,7 +429,7 @@ onMounted(() => {
 
     <!-- Create User Dialog -->
     <Dialog v-model:open="isCreateDialogOpen">
-      <DialogContent>
+      <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create User</DialogTitle>
           <DialogDescription>
@@ -371,8 +467,43 @@ onMounted(() => {
             </FormItem>
           </FormField>
 
+          <div class="space-y-2">
+            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Roles</label>
+            <MultiSelect
+              v-model="selectedRoles"
+              :options="roleOptions"
+              placeholder="Select roles..."
+              search-placeholder="Search roles..."
+              empty-text="No roles found."
+            />
+          </div>
+
+          <div class="space-y-3">
+            <label class="text-sm font-medium leading-none">Permissions</label>
+            <div class="border rounded-md p-4 max-h-60 overflow-y-auto space-y-4">
+              <div v-for="(permissions, group) in groupedPermissions" :key="group" class="space-y-2">
+                <h4 class="text-sm font-semibold capitalize text-muted-foreground">{{ group }}</h4>
+                <div class="grid grid-cols-2 gap-2">
+                  <label
+                    v-for="permission in permissions"
+                    :key="permission.id"
+                    class="flex items-center space-x-2 cursor-pointer hover:bg-accent p-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="isPermissionSelected(permission.name)"
+                      @change="togglePermission(permission.name)"
+                      class="h-4 w-4 rounded border-gray-300"
+                    />
+                    <span class="text-sm">{{ permission.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
-            <Button type="button" variant="outline" @click="isCreateDialogOpen = false; resetForm()">
+            <Button type="button" variant="outline" @click="isCreateDialogOpen = false; resetForm(); selectedRoles = []; selectedPermissions = []">
               Cancel
             </Button>
             <Button
@@ -389,7 +520,7 @@ onMounted(() => {
 
     <!-- Edit User Dialog -->
     <Dialog v-model:open="isEditDialogOpen">
-      <DialogContent>
+      <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>
@@ -427,8 +558,43 @@ onMounted(() => {
             </FormItem>
           </FormField>
 
+          <div class="space-y-2">
+            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Roles</label>
+            <MultiSelect
+              v-model="selectedRoles"
+              :options="roleOptions"
+              placeholder="Select roles..."
+              search-placeholder="Search roles..."
+              empty-text="No roles found."
+            />
+          </div>
+
+          <div class="space-y-3">
+            <label class="text-sm font-medium leading-none">Permissions</label>
+            <div class="border rounded-md p-4 max-h-60 overflow-y-auto space-y-4">
+              <div v-for="(permissions, group) in groupedPermissions" :key="group" class="space-y-2">
+                <h4 class="text-sm font-semibold capitalize text-muted-foreground">{{ group }}</h4>
+                <div class="grid grid-cols-2 gap-2">
+                  <label
+                    v-for="permission in permissions"
+                    :key="permission.id"
+                    class="flex items-center space-x-2 cursor-pointer hover:bg-accent p-2 rounded"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="isPermissionSelected(permission.name)"
+                      @change="togglePermission(permission.name)"
+                      class="h-4 w-4 rounded border-gray-300"
+                    />
+                    <span class="text-sm">{{ permission.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
-            <Button type="button" variant="outline" @click="isEditDialogOpen = false; resetForm()">
+            <Button type="button" variant="outline" @click="isEditDialogOpen = false; resetForm(); selectedRoles = []; selectedPermissions = []">
               Cancel
             </Button>
             <Button type="submit" :disabled="isSubmitting">
