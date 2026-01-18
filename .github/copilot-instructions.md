@@ -133,6 +133,9 @@ pnpm build                        # Production build
 3. **Guard name is 'api'** - All Spatie models must use `guard_name = 'api'`
 4. **Type everything in Nuxt** - Use TypeScript interfaces for API responses
 5. **Composables for logic** - Keep components presentational, logic in composables
+6. **When you need a new component, always add it via:**
+  `pnpm dlx shadcn-vue@latest add <component>`
+  Example: `pnpm dlx shadcn-vue@latest add pagination`
 
 ## Database Seeding
 

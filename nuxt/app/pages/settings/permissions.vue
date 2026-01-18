@@ -59,6 +59,14 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Plus, Pencil, Trash2, Shield, Search } from 'lucide-vue-next'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import type { Permission } from '~/types/auth'
 
 definePageMeta({
@@ -241,10 +249,16 @@ watch(isCreateDialogOpen, (isOpen) => {
   }
 })
 
-// Watchers for filter/search/pagination
+
+// Watchers for filter/search
 watch([selectedGroup, searchQuery], () => {
   fetchPermissions(1)
 })
+
+const handlePageChange = (newPage: number) => {
+  currentPage.value = newPage
+  fetchPermissions(newPage)
+}
 
 onMounted(() => {
   fetchGroups()
@@ -363,6 +377,24 @@ onMounted(() => {
               (filtered)
             </span>
           </p>
+          <Pagination v-if="lastPage > 1" :page="currentPage" @update:page="handlePageChange" :items-per-page="perPage" :total="total">
+            <PaginationContent v-slot="{ items }">
+              <PaginationPrevious />
+
+              <template v-for="(item, index) in items" :key="index">
+                <PaginationItem
+                  v-if="item.type === 'page'"
+                  :value="item.value"
+                  :is-active="item.value === currentPage"
+                >
+                  {{ item.value }}
+                </PaginationItem>
+                <PaginationEllipsis v-else-if="item.type === 'ellipsis'" :index="item.index" />
+              </template>
+
+              <PaginationNext />
+            </PaginationContent>
+          </Pagination>
         </div>
       </CardContent>
     </Card>
