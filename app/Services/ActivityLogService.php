@@ -13,7 +13,17 @@ class ActivityLogService
         ?int $modelId = null,
         ?string $description = null,
         ?Request $request = null
-    ): ActivityLog {
+    ): ?ActivityLog {
+        // Check global and per-model logging config
+        $enabled = config('activitylog.enabled', true);
+        $modelLogging = config('activitylog.model_logging', []);
+        if (!$enabled) {
+            return null;
+        }
+        if ($model && isset($modelLogging[strtolower($model)]) && !$modelLogging[strtolower($model)]) {
+            return null;
+        }
+
         $userId = auth()->id();
         $ipAddress = $request?->ip();
         $userAgent = $request?->userAgent();

@@ -36,6 +36,15 @@ class UpdateUserAction
 
         $user->load(['roles.permissions', 'permissions']);
 
+        // Log activity
+        app(\App\Services\ActivityLogService::class)->log(
+            action: 'user.updated',
+            model: 'User',
+            modelId: $user->id,
+            description: "User '{$user->name}' was updated",
+            request: $request
+        );
+
         return response()->json([
             'message' => 'User updated successfully.',
             'data' => new UserResource($user),

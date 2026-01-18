@@ -53,6 +53,14 @@ import {
 import { Badge } from '~/components/ui/badge'
 import { Checkbox } from '~/components/ui/checkbox'
 import { Plus, Pencil, Trash2, Shield } from 'lucide-vue-next'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import type { Role, Permission } from '~/types/auth'
 
 definePageMeta({
@@ -118,7 +126,7 @@ const fetchRoles = async (page = 1) => {
         total: number
       }
     }>(`/admin/roles?per_page=${perPage.value}&page=${page}`)
-    
+
     roles.value = response.data
     currentPage.value = response.meta.current_page
     lastPage.value = response.meta.last_page
@@ -128,6 +136,11 @@ const fetchRoles = async (page = 1) => {
   } finally {
     isLoading.value = false
   }
+}
+
+const handlePageChange = (newPage: number) => {
+  currentPage.value = newPage
+  fetchRoles(newPage)
 }
 
 // Fetch permissions
@@ -150,14 +163,14 @@ const onCreateSubmit = handleCreateSubmit(async (values) => {
     const response = await api.post<{ data: Role }>('/admin/roles', {
       name: values.name,
     })
-    
+
     // Assign permissions if any were selected
     if (selectedPermissions.value.length > 0) {
       await api.post(`/admin/roles/${response.data.id}/permissions`, {
         permissions: selectedPermissions.value,
       })
     }
-    
+
     successMessage.value = 'Role created successfully'
     isCreateDialogOpen.value = false
     resetCreateForm()
@@ -171,7 +184,7 @@ const onCreateSubmit = handleCreateSubmit(async (values) => {
 // Edit role
 const onEditSubmit = handleEditSubmit(async (values) => {
   if (!selectedRole.value) return
-  
+
   errorMessage.value = ''
   successMessage.value = ''
   try {
@@ -191,7 +204,7 @@ const onEditSubmit = handleEditSubmit(async (values) => {
 // Delete role
 const deleteRole = async () => {
   if (!selectedRole.value) return
-  
+
   errorMessage.value = ''
   successMessage.value = ''
   try {
@@ -208,7 +221,7 @@ const deleteRole = async () => {
 // Assign permissions
 const assignPermissions = async () => {
   if (!selectedRole.value) return
-  
+
   errorMessage.value = ''
   successMessage.value = ''
   try {
@@ -343,7 +356,7 @@ onMounted(() => {
                 <TableCell class="font-medium">{{ role.name }}</TableCell>
                 <TableCell>
                   <div class="flex flex-wrap gap-1 max-w-md">
-                    <Badge v-for="permission in role.permissions.slice(0, 5)" :key="permission" variant="outline" class="text-xs">
+                    <Badge v-for="permission in role.permissions.slice(0, 5)" :key="permission" variant="default" class="text-xs">
                       {{ permission }}
                     </Badge>
                     <Badge v-if="role.permissions.length > 5" variant="outline" class="text-xs">
@@ -374,18 +387,28 @@ onMounted(() => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="lastPage > 1" class="flex items-center justify-between mt-4">
+        <div class="flex items-center justify-between mt-4">
           <p class="text-sm text-muted-foreground">
-            Showing {{ (currentPage - 1) * perPage + 1 }} to {{ Math.min(currentPage * perPage, total) }} of {{ total }} roles
+            Showing page {{ currentPage }} of {{ lastPage }} ({{ total }} total roles)
           </p>
-          <div class="flex gap-2">
-            <Button variant="outline" size="sm" :disabled="currentPage === 1" @click="fetchRoles(currentPage - 1)">
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" :disabled="currentPage === lastPage" @click="fetchRoles(currentPage + 1)">
-              Next
-            </Button>
-          </div>
+          <Pagination v-if="lastPage > 1" :page="currentPage" @update:page="handlePageChange" :items-per-page="perPage" :total="total">
+            <PaginationContent v-slot="{ items }">
+              <PaginationPrevious />
+
+              <template v-for="(item, index) in items" :key="index">
+                <PaginationItem
+                  v-if="item.type === 'page'"
+                  :value="item.value"
+                  :is-active="item.value === currentPage"
+                >
+                  {{ item.value }}
+                </PaginationItem>
+                <PaginationEllipsis v-else-if="item.type === 'ellipsis'" :index="item.index" />
+              </template>
+
+              <PaginationNext />
+            </PaginationContent>
+          </Pagination>
         </div>
       </CardContent>
     </Card>

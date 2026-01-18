@@ -73,3 +73,7 @@ Route::middleware(['auth:api', 'permission:permissions.view'])->group(function (
 Route::middleware(['auth:api', 'permission:activity.view'])->group(function () {
     Route::get('/admin/activity', ListActivityAction::class);
 });
+
+Route::middleware(['auth:api'])->group(function () {
+    Route::get('/admin/dashboard/stats', \App\Actions\Admin\Dashboard\GetDashboardStatsAction::class);
+});

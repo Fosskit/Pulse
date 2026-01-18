@@ -18,6 +18,15 @@ class StoreRoleAction
 
         $role->load('permissions');
 
+        // Log activity
+        app(\App\Services\ActivityLogService::class)->log(
+            action: 'role.created',
+            model: 'Role',
+            modelId: $role->id,
+            description: "Role '{$role->name}' was created",
+            request: $request
+        );
+
         return response()->json([
             'message' => 'Role created successfully.',
             'data' => new RoleResource($role),

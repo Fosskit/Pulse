@@ -53,6 +53,14 @@ import {
 import { Badge } from '~/components/ui/badge'
 import { MultiSelect } from '~/components/ui/multi-select'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import type { User } from '~/types/auth'
 
 definePageMeta({
@@ -153,6 +161,11 @@ const fetchUsers = async (page = 1) => {
   } finally {
     isLoading.value = false
   }
+}
+
+const handlePageChange = (newPage: number) => {
+  currentPage.value = newPage
+  fetchUsers(newPage)
 }
 
 // Create user
@@ -411,18 +424,28 @@ onMounted(() => {
         </div>
 
         <!-- Pagination -->
-        <div v-if="lastPage > 1" class="flex items-center justify-between mt-4">
+        <div class="flex items-center justify-between mt-4">
           <p class="text-sm text-muted-foreground">
-            Showing {{ (currentPage - 1) * perPage + 1 }} to {{ Math.min(currentPage * perPage, total) }} of {{ total }} users
+            Showing page {{ currentPage }} of {{ lastPage }} ({{ total }} total users)
           </p>
-          <div class="flex gap-2">
-            <Button variant="outline" size="sm" :disabled="currentPage === 1" @click="fetchUsers(currentPage - 1)">
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" :disabled="currentPage === lastPage" @click="fetchUsers(currentPage + 1)">
-              Next
-            </Button>
-          </div>
+          <Pagination v-if="lastPage > 1" :page="currentPage" @update:page="handlePageChange" :items-per-page="perPage" :total="total">
+            <PaginationContent v-slot="{ items }">
+              <PaginationPrevious />
+
+              <template v-for="(item, index) in items" :key="index">
+                <PaginationItem
+                  v-if="item.type === 'page'"
+                  :value="item.value"
+                  :is-active="item.value === currentPage"
+                >
+                  {{ item.value }}
+                </PaginationItem>
+                <PaginationEllipsis v-else-if="item.type === 'ellipsis'" :index="item.index" />
+              </template>
+
+              <PaginationNext />
+            </PaginationContent>
+          </Pagination>
         </div>
       </CardContent>
     </Card>

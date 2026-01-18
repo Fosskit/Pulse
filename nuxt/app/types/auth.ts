@@ -51,3 +51,17 @@ export interface Permission {
   created_at: string
   updated_at: string
 }
+
+export interface ActivityLog {
+  id: number
+  user_id: number | null
+  user_name: string | null
+  action: string
+  model: string | null
+  model_id: number | null
+  description: string
+  ip_address: string | null
+  user_agent: string | null
+  created_at: string
+  updated_at: string
+}

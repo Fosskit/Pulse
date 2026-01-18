@@ -8,6 +8,7 @@ import {
   Command,
   Frame,
   GalleryVerticalEnd,
+  LayoutDashboard,
   Map,
   PieChart,
   Settings2,
@@ -62,22 +63,23 @@ const userData = computed(() => {
 const data = {
   teams: [
     {
-      name: "Acme Inc",
+      name: "Starter",
       logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
+      plan: "Template"
+    }
   ],
   navMain: [
+    {
+      title: "Dashboard",
+      url: "#",
+      icon: LayoutDashboard,
+      items: [
+        {
+          title: "Home",
+          url: "/",
+        }
+      ],
+    },
     {
       title: "Settings",
       url: "#",
@@ -94,23 +96,27 @@ const data = {
         {
           title: "Permissions",
           url: "/settings/permissions",
+        },
+        {
+          title: "Activity Logs",
+          url: "/settings/activity",
         }
       ],
     },
   ],
   projects: [
     {
-      name: "Design Engineering",
+      name: "Starter",
       url: "#",
       icon: Frame,
     },
     {
-      name: "Sales & Marketing",
+      name: "Pulse",
       url: "#",
       icon: PieChart,
     },
     {
-      name: "Travel",
+      name: "Music",
       url: "#",
       icon: Map,
     },
