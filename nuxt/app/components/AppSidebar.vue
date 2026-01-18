@@ -90,6 +90,10 @@ const data = {
         {
           title: "Roles",
           url: "/settings/roles",
+        },
+        {
+          title: "Permissions",
+          url: "/settings/permissions",
         }
       ],
     },

@@ -1,7 +1,11 @@
 <?php
 
 use App\Actions\Admin\Activity\ListActivityAction;
+use App\Actions\Admin\Permissions\DeletePermissionAction;
 use App\Actions\Admin\Permissions\ListPermissionsAction;
+use App\Actions\Admin\Permissions\ShowPermissionAction;
+use App\Actions\Admin\Permissions\StorePermissionAction;
+use App\Actions\Admin\Permissions\UpdatePermissionAction;
 use App\Actions\Admin\Roles\AssignPermissionsAction as AssignPermissionsToRoleAction;
 use App\Actions\Admin\Roles\DeleteRoleAction;
 use App\Actions\Admin\Roles\ListRolesAction;
@@ -59,6 +63,11 @@ Route::middleware(['auth:api', 'permission:roles.view'])->group(function () {
 
 Route::middleware(['auth:api', 'permission:permissions.view'])->group(function () {
     Route::get('/admin/permissions', ListPermissionsAction::class);
+    Route::get('/admin/permissions/{permission}', ShowPermissionAction::class);
+    Route::post('/admin/permissions', StorePermissionAction::class)->middleware('permission:permissions.create');
+    Route::put('/admin/permissions/{permission}', UpdatePermissionAction::class)->middleware('permission:permissions.update');
+    Route::delete('/admin/permissions/{permission}', DeletePermissionAction::class)->middleware('permission:permissions.delete');
+    Route::get('/admin/permission-groups', \App\Actions\Admin\Permissions\ListPermissionGroupsAction::class);
 });
 
 Route::middleware(['auth:api', 'permission:activity.view'])->group(function () {
