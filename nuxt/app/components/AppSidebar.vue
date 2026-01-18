@@ -86,6 +86,10 @@ const data = {
         {
           title: "Users",
           url: "/settings/users",
+        },
+        {
+          title: "Roles",
+          url: "/settings/roles",
         }
       ],
     },

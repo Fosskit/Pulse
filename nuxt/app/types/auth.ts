@@ -36,3 +36,18 @@ export interface ApiError {
   message: string
   errors?: Record<string, string[]>
 }
+
+export interface Role {
+  id: number
+  name: string
+  permissions: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Permission {
+  id: number
+  name: string
+  created_at: string
+  updated_at: string
+}
