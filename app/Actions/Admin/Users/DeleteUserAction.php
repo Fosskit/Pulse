@@ -9,14 +9,6 @@ class DeleteUserAction
 {
     public function __invoke(User $user): JsonResponse
     {
-        // Log activity before deletion
-        app(\App\Services\ActivityLogService::class)->log(
-            action: 'user.deleted',
-            model: 'User',
-            modelId: $user->id,
-            description: "User '{$user->name}' was deleted"
-        );
-
         $user->delete();
 
         return response()->json([

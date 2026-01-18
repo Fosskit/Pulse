@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class ActivityLog extends Model
 {
+    protected $connection = 'logging';
+
     protected $fillable = [
         'user_id',
         'action',
@@ -22,6 +26,7 @@ class ActivityLog extends Model
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        $relation = $this->belongsTo(User::class, 'fosskit_log.activity_log.user_id', 'fosskit_pulse.users.id');
+        return $relation;
     }
 }

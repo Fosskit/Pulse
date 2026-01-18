@@ -34,15 +34,6 @@ class StoreUserAction
 
         $user->load(['roles.permissions', 'permissions']);
 
-        // Log activity
-        app(\App\Services\ActivityLogService::class)->log(
-            action: 'user.created',
-            model: 'User',
-            modelId: $user->id,
-            description: "User '{$user->name}' was created",
-            request: $request
-        );
-
         return response()->json([
             'message' => 'User created successfully.',
             'data' => new UserResource($user),

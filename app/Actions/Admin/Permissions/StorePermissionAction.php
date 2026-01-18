@@ -16,15 +16,6 @@ class StorePermissionAction
             'guard_name' => 'api',
         ]);
 
-        // Log activity
-        app(\App\Services\ActivityLogService::class)->log(
-            action: 'permission.created',
-            model: 'Permission',
-            modelId: $permission->id,
-            description: "Permission '{$permission->name}' was created",
-            request: $request
-        );
-
         return response()->json([
             'message' => 'Permission created successfully.',
             'data' => new PermissionResource($permission),

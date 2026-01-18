@@ -17,7 +17,7 @@ class ActivityResource extends JsonResource
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
-            'user_name' => $this->user->name ?? null,
+            'user_name' => $this->user?->name,
             'action' => $this->action,
             'model' => $this->model,
             'model_id' => $this->model_id,
