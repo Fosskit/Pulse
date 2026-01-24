@@ -77,3 +77,12 @@ Route::middleware(['auth:api', 'permission:activity.view'])->group(function () {
 Route::middleware(['auth:api'])->group(function () {
     Route::get('/admin/dashboard/stats', \App\Actions\Admin\Dashboard\GetDashboardStatsAction::class);
 });
+
+// Reference data routes (generic CRUD for all reference tables)
+Route::middleware(['auth:api'])->prefix('references')->group(function () {
+    Route::get('/{type}', [\App\Http\Controllers\ReferenceController::class, 'index']);
+    Route::get('/{type}/{id}', [\App\Http\Controllers\ReferenceController::class, 'show']);
+    Route::post('/{type}', [\App\Http\Controllers\ReferenceController::class, 'store']);
+    Route::put('/{type}/{id}', [\App\Http\Controllers\ReferenceController::class, 'update']);
+    Route::delete('/{type}/{id}', [\App\Http\Controllers\ReferenceController::class, 'destroy']);
+});
