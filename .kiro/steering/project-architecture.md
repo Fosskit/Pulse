@@ -163,22 +163,113 @@ pnpm build                        # Production build
   `pnpm dlx shadcn-vue@latest add <component>`
   Example: `pnpm dlx shadcn-vue@latest add pagination`
 7. **Form handling with vee-validate + Zod:**
-  - **CRITICAL**: Never use a single `useForm()` for multiple forms (create + edit dialogs)
-  - **Always create separate form instances** for each dialog:
-    ```typescript
-    const createForm = useForm({ validationSchema: toTypedSchema(schema) })
-    const editForm = useForm({ validationSchema: toTypedSchema(schema) })
+
+  ### Pattern 1: Single Form with Schema Switching (RECOMMENDED for Create/Edit Dialogs)
+  
+  Use when you have create and edit dialogs for the **same entity** (see `users.vue` and `patients.vue` examples):
+  
+  ```typescript
+  // Define separate schemas for create and edit
+  const createSchema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+  })
+
+  const editSchema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters').optional().or(z.literal('')),
+  })
+
+  // Single form context that switches validation based on active dialog
+  const currentSchema = computed(() => isCreateDialogOpen.value ? createSchema : editSchema)
+
+  const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
+    validationSchema: computed(() => toTypedSchema(currentSchema.value)),
+  })
+
+  // Use the same handleSubmit, setValues, resetForm for both dialogs
+  const onCreateSubmit = handleSubmit(async (values) => {
+    // Create logic
+  })
+
+  const onEditSubmit = handleSubmit(async (values) => {
+    // Edit logic
+  })
+  ```
+
+  **Key Points:**
+  - Use `computed()` to switch between schemas based on dialog state
+  - Wrap `toTypedSchema()` in another `computed()` for reactivity
+  - Single form instance works for both create and edit dialogs
+  - Different schemas allow different validation rules (e.g., optional password in edit)
+  - Use `@submit.prevent` on both forms to prevent default submission
+
+  ### Pattern 2: Multiple Independent Forms (for Different Entities)
+  
+  Use when you have **truly different forms** on the same page (e.g., user profile form + settings form):
+  
+  ```typescript
+  // Profile form
+  const profileSchema = z.object({
+    name: z.string().min(1),
+    bio: z.string().optional(),
+  })
+
+  const profileForm = useForm({
+    validationSchema: toTypedSchema(profileSchema),
+  })
+
+  const onProfileSubmit = profileForm.handleSubmit(async (values) => {
+    // Profile update logic
+  })
+
+  // Settings form (completely different entity)
+  const settingsSchema = z.object({
+    theme: z.enum(['light', 'dark']),
+    notifications: z.boolean(),
+  })
+
+  const settingsForm = useForm({
+    validationSchema: toTypedSchema(settingsSchema),
+  })
+
+  const onSettingsSubmit = settingsForm.handleSubmit(async (values) => {
+    // Settings update logic
+  })
+  ```
+
+  **When to use multiple form instances:**
+  - Forms manage **different entities** (User vs Settings)
+  - Forms are **always visible simultaneously** (not in dialogs)
+  - Forms have **completely different fields and validation**
+  - Each form needs independent state management
+
+  **DO NOT use multiple forms for:**
+  - Create/Edit dialogs of the same entity (use Pattern 1 instead)
+  - Forms that share similar fields or structure
+
+  ### Custom Component Bindings:
+  
+  - For Input components: Use `v-bind="componentField"` directly
+  - For custom components (DatePicker, etc): Explicitly bind props:
+    ```vue
+    <DatePicker 
+      :model-value="componentField.modelValue" 
+      @update:model-value="componentField['onUpdate:modelValue']"
+    />
     ```
-  - Use `createForm.handleSubmit()`, `createForm.resetForm()`, `createForm.setValues()`
-  - Use `editForm.handleSubmit()`, `editForm.resetForm()`, `editForm.setValues()`
-  - Access loading state via `createForm.isSubmitting.value` and `editForm.isSubmitting.value`
-  - **Alternative approach**: Use computed schema switching (see `users.vue` example)
-    ```typescript
-    const currentSchema = computed(() => isCreateDialogOpen.value ? createSchema : editSchema)
-    const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
-      validationSchema: computed(() => toTypedSchema(currentSchema.value)),
-    })
+  - For radio buttons:
+    ```vue
+    <input
+      type="radio"
+      value="M"
+      :checked="componentField.modelValue === 'M'"
+      @change="componentField['onUpdate:modelValue']('M')"
+    />
     ```
+  - For Select components with transformations: Use `z.union([z.string(), z.number()]).transform()` in schema
 
 ## Database Seeding
 

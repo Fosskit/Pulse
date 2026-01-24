@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
+import { toast } from 'vue-sonner'
 import { useApi } from '~/composables/useApi'
 import { useErrorHandler } from '~/composables/useErrorHandler'
 import { Button } from '~/components/ui/button'
@@ -39,10 +40,6 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
-import {
-  Alert,
-  AlertDescription,
-} from '~/components/ui/alert'
 import {
   FormControl,
   FormField,
@@ -103,8 +100,6 @@ const errorHandler = useErrorHandler()
 
 const patients = ref<Patient[]>([])
 const isLoading = ref(false)
-const errorMessage = ref<string>('')
-const successMessage = ref<string>('')
 
 // Reference data
 const nationalities = ref<ReferenceData[]>([])
@@ -197,7 +192,6 @@ const fetchReferenceData = async () => {
 // Fetch patients
 const fetchPatients = async (page = 1) => {
   isLoading.value = true
-  errorMessage.value = ''
   try {
     const response = await api.get<{
       data: Patient[]
@@ -214,7 +208,9 @@ const fetchPatients = async (page = 1) => {
     lastPage.value = response.meta.last_page
     total.value = response.meta.total
   } catch (error: any) {
-    errorMessage.value = errorHandler.formatError(error)
+    toast.error('Failed to load patients', {
+      description: errorHandler.formatError(error)
+    })
   } finally {
     isLoading.value = false
   }
@@ -227,8 +223,6 @@ const handlePageChange = (newPage: number) => {
 
 // Create patient
 const onCreateSubmit = handleSubmit(async (values) => {
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     console.log('Form values before submission:', values)
     
@@ -245,13 +239,19 @@ const onCreateSubmit = handleSubmit(async (values) => {
     console.log('Submitting patient data:', payload)
     const response = await api.post('/patients', payload)
     console.log('Patient created:', response)
-    successMessage.value = 'Patient created successfully'
+    
+    toast.success('Patient created successfully', {
+      description: `${values.surname} ${values.name} has been added to the system.`
+    })
+    
     isCreateDialogOpen.value = false
     resetForm()
     await fetchPatients(currentPage.value)
   } catch (error) {
     console.error('Error creating patient:', error)
-    errorMessage.value = errorHandler.formatError(error)
+    toast.error('Failed to create patient', {
+      description: errorHandler.formatError(error)
+    })
   }
 })
 
@@ -259,17 +259,21 @@ const onCreateSubmit = handleSubmit(async (values) => {
 const onEditSubmit = handleSubmit(async (values) => {
   if (!selectedPatient.value) return
 
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     await api.put(`/patients/${selectedPatient.value.id}`, values)
-    successMessage.value = 'Patient updated successfully'
+    
+    toast.success('Patient updated successfully', {
+      description: `${values.surname} ${values.name} has been updated.`
+    })
+    
     isEditDialogOpen.value = false
     selectedPatient.value = null
     resetForm()
     await fetchPatients(currentPage.value)
   } catch (error: any) {
-    errorMessage.value = errorHandler.formatError(error)
+    toast.error('Failed to update patient', {
+      description: errorHandler.formatError(error)
+    })
   }
 })
 
@@ -277,16 +281,21 @@ const onEditSubmit = handleSubmit(async (values) => {
 const deletePatient = async () => {
   if (!selectedPatient.value) return
 
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     await api.delete(`/patients/${selectedPatient.value.id}`)
-    successMessage.value = 'Patient deleted successfully'
+    
+    const patientName = [selectedPatient.value.surname, selectedPatient.value.name].filter(Boolean).join(' ')
+    toast.success('Patient deleted successfully', {
+      description: `${patientName} has been removed from the system.`
+    })
+    
     isDeleteDialogOpen.value = false
     selectedPatient.value = null
     await fetchPatients(currentPage.value)
   } catch (error: any) {
-    errorMessage.value = errorHandler.formatError(error)
+    toast.error('Failed to delete patient', {
+      description: errorHandler.formatError(error)
+    })
   }
 }
 
@@ -306,8 +315,6 @@ const openCreateDialog = () => {
     deceased: false,
     deceased_at: '',
   })
-  errorMessage.value = ''
-  successMessage.value = ''
   isCreateDialogOpen.value = true
 }
 
@@ -442,14 +449,6 @@ const getSexLabel = (sex: string) => {
         Add Patient
       </Button>
     </div>
-
-    <Alert v-if="errorMessage" variant="destructive">
-      <AlertDescription>{{ errorMessage }}</AlertDescription>
-    </Alert>
-
-    <Alert v-if="successMessage" variant="default">
-      <AlertDescription>{{ successMessage }}</AlertDescription>
-    </Alert>
 
     <Card>
       <CardHeader>
