@@ -162,6 +162,23 @@ pnpm build                        # Production build
 6. **When you need a new component, always add it via:**
   `pnpm dlx shadcn-vue@latest add <component>`
   Example: `pnpm dlx shadcn-vue@latest add pagination`
+7. **Form handling with vee-validate + Zod:**
+  - **CRITICAL**: Never use a single `useForm()` for multiple forms (create + edit dialogs)
+  - **Always create separate form instances** for each dialog:
+    ```typescript
+    const createForm = useForm({ validationSchema: toTypedSchema(schema) })
+    const editForm = useForm({ validationSchema: toTypedSchema(schema) })
+    ```
+  - Use `createForm.handleSubmit()`, `createForm.resetForm()`, `createForm.setValues()`
+  - Use `editForm.handleSubmit()`, `editForm.resetForm()`, `editForm.setValues()`
+  - Access loading state via `createForm.isSubmitting.value` and `editForm.isSubmitting.value`
+  - **Alternative approach**: Use computed schema switching (see `users.vue` example)
+    ```typescript
+    const currentSchema = computed(() => isCreateDialogOpen.value ? createSchema : editSchema)
+    const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
+      validationSchema: computed(() => toTypedSchema(currentSchema.value)),
+    })
+    ```
 
 ## Database Seeding
 
@@ -207,3 +224,62 @@ This project uses a generic reference CRUD system for tables with common structu
 **API endpoints:** `/api/references/{type}` (GET, POST, PUT, DELETE)
 
 See `app/docs/REFERENCE_CRUD.md` for detailed documentation.
+
+
+## Code Generation System
+
+This project includes an automatic code generation system for entities like patients, invoices, etc.
+
+### Backend
+
+**CodeGenerator Model** (`app/Models/CodeGenerator.php`):
+- Stores configuration for each entity type
+- Fields: `entity`, `prefix`, `format`, `current_sequence`, `reset_yearly`, `reset_monthly`, `padding`
+- Auto-increments sequence and generates codes based on format
+
+**CodeGeneratorService** (`app/Services/CodeGeneratorService.php`):
+- `generate(string $entity)` - Generates next code for entity
+- `getOrCreate(string $entity, array $defaults)` - Get or create generator config
+
+**Format Placeholders**:
+- `{prefix}` - Custom prefix (e.g., PAT, INV)
+- `{year}` - Full year (2026)
+- `{year2}` - Short year (26)
+- `{month}` - Month (01-12)
+- `{day}` - Day (01-31)
+- `{seq:5}` - Sequence with padding (00001)
+
+**Example Formats**:
+- `{prefix}-{year}-{seq:5}` → PAT-2026-00001
+- `{prefix}{year2}{month}{seq:4}` → PAT260100001
+- `{prefix}-{seq:6}` → PAT-000001
+
+**Usage in Actions**:
+```php
+public function __invoke(StorePatientRequest $request, CodeGeneratorService $codeGenerator)
+{
+    $data = $request->validated();
+    
+    // Auto-generate code if not provided
+    if (empty($data['code'])) {
+        $data['code'] = $codeGenerator->generate('patient');
+    }
+    
+    $patient = Patient::create($data);
+    // ...
+}
+```
+
+### Frontend
+
+**Code Generator Settings** (`/settings/code-generators`):
+- Configure format, prefix, padding for each entity
+- Live preview of generated code format
+- Toggle yearly/monthly sequence reset
+- Helpful placeholder reference card
+
+**Adding Code Generation to New Entities**:
+1. Create seeder entry in `CodeGeneratorSeeder`
+2. Inject `CodeGeneratorService` in Store action
+3. Call `$codeGenerator->generate('entity-name')` if code is empty
+4. Frontend will auto-generate on create (leave code field empty)

@@ -95,3 +95,9 @@ Route::middleware(['auth:api'])->prefix('patients')->group(function () {
     Route::put('/{patient}', \App\Actions\Patient\UpdatePatientAction::class);
     Route::delete('/{patient}', \App\Actions\Patient\DeletePatientAction::class);
 });
+
+// Code Generator settings
+Route::middleware(['auth:api'])->prefix('settings/code-generators')->group(function () {
+    Route::get('/', \App\Actions\Settings\CodeGenerator\ListCodeGeneratorsAction::class);
+    Route::put('/{codeGenerator}', \App\Actions\Settings\CodeGenerator\UpdateCodeGeneratorAction::class);
+});

@@ -16,7 +16,7 @@ class PatientResource extends JsonResource
             'name' => $this->name,
             'telephone' => $this->telephone,
             'sex' => $this->sex,
-            'birthdate' => $this->birthdate,
+            'birthdate' => $this->birthdate?->format('Y-m-d'),
             'multiple_birth' => $this->multiple_birth,
             'nationality_id' => $this->nationality_id,
             'nationality' => $this->whenLoaded('nationality', fn() => new ReferenceResource($this->nationality)),
@@ -25,7 +25,7 @@ class PatientResource extends JsonResource
             'occupation_id' => $this->occupation_id,
             'occupation' => $this->whenLoaded('occupation', fn() => new ReferenceResource($this->occupation)),
             'deceased' => $this->deceased,
-            'deceased_at' => $this->deceased_at,
+            'deceased_at' => $this->deceased_at?->format('Y-m-d'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

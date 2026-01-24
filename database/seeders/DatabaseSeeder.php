@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             NationalitySeeder::class,
             OccupationSeeder::class,
             MaritalStatusSeeder::class,
+            CodeGeneratorSeeder::class,
         ]);
     }
 }

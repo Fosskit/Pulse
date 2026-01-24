@@ -115,7 +115,11 @@ const referenceSchema = z.object({
   status_id: z.number().default(1),
 })
 
-const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
+const createForm = useForm({
+  validationSchema: toTypedSchema(referenceSchema),
+})
+
+const editForm = useForm({
   validationSchema: toTypedSchema(referenceSchema),
 })
 
@@ -158,14 +162,14 @@ const handlePageChange = (newPage: number) => {
 }
 
 // Create reference
-const onCreateSubmit = handleSubmit(async (values) => {
+const onCreateSubmit = createForm.handleSubmit(async (values) => {
   errorMessage.value = ''
   successMessage.value = ''
   try {
     await api.post(`/references/${activeType.value}`, values)
     successMessage.value = `${currentType.value.singular} created successfully`
     isCreateDialogOpen.value = false
-    resetForm()
+    createForm.resetForm()
     await fetchReferences(currentPage.value)
   } catch (error) {
     errorMessage.value = errorHandler.formatError(error)
@@ -173,7 +177,7 @@ const onCreateSubmit = handleSubmit(async (values) => {
 })
 
 // Edit reference
-const onEditSubmit = handleSubmit(async (values) => {
+const onEditSubmit = editForm.handleSubmit(async (values) => {
   if (!selectedReference.value) return
 
   errorMessage.value = ''
@@ -183,7 +187,7 @@ const onEditSubmit = handleSubmit(async (values) => {
     successMessage.value = `${currentType.value.singular} updated successfully`
     isEditDialogOpen.value = false
     selectedReference.value = null
-    resetForm()
+    editForm.resetForm()
     await fetchReferences(currentPage.value)
   } catch (error: any) {
     errorMessage.value = errorHandler.formatError(error)
@@ -209,8 +213,8 @@ const deleteReference = async () => {
 
 // Open create dialog
 const openCreateDialog = () => {
-  resetForm()
-  setValues({
+  createForm.resetForm()
+  createForm.setValues({
     code: '',
     name: '',
     description: '',
@@ -224,7 +228,7 @@ const openCreateDialog = () => {
 // Open edit dialog
 const openEditDialog = (reference: ReferenceData) => {
   selectedReference.value = reference
-  setValues({
+  editForm.setValues({
     code: reference.code,
     name: reference.name,
     description: reference.description || '',
@@ -417,11 +421,11 @@ onMounted(() => {
           </FormField>
 
           <DialogFooter>
-            <Button type="button" variant="outline" @click="isCreateDialogOpen = false; resetForm()">
+            <Button type="button" variant="outline" @click="isCreateDialogOpen = false; createForm.resetForm()">
               Cancel
             </Button>
-            <Button type="submit" :disabled="isSubmitting">
-              <span v-if="isSubmitting">Creating...</span>
+            <Button type="submit" :disabled="createForm.isSubmitting.value">
+              <span v-if="createForm.isSubmitting.value">Creating...</span>
               <span v-else>Create</span>
             </Button>
           </DialogFooter>
@@ -470,11 +474,11 @@ onMounted(() => {
           </FormField>
 
           <DialogFooter>
-            <Button type="button" variant="outline" @click="isEditDialogOpen = false; resetForm()">
+            <Button type="button" variant="outline" @click="isEditDialogOpen = false; editForm.resetForm()">
               Cancel
             </Button>
-            <Button type="submit" :disabled="isSubmitting">
-              <span v-if="isSubmitting">Updating...</span>
+            <Button type="submit" :disabled="editForm.isSubmitting.value">
+              <span v-if="editForm.isSubmitting.value">Updating...</span>
               <span v-else>Update</span>
             </Button>
           </DialogFooter>

@@ -117,6 +117,10 @@ const data = {
         {
           title: "Reference Data",
           url: "/settings/references",
+        },
+        {
+          title: "Code Generators",
+          url: "/settings/code-generators",
         }
       ],
     },
