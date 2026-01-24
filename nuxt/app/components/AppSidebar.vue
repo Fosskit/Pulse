@@ -14,6 +14,8 @@ import {
   Settings2,
   SquareTerminal,
   Users,
+  UserRound,
+  Database,
 } from "lucide-vue-next"
 import NavMain from '@/components/NavMain.vue'
 import NavProjects from '@/components/NavProjects.vue'
@@ -81,6 +83,17 @@ const data = {
       ],
     },
     {
+      title: "Patients",
+      url: "#",
+      icon: UserRound,
+      items: [
+        {
+          title: "Patient List",
+          url: "/patients",
+        }
+      ],
+    },
+    {
       title: "Settings",
       url: "#",
       icon: Settings2,
@@ -100,6 +113,10 @@ const data = {
         {
           title: "Activity Logs",
           url: "/settings/activity",
+        },
+        {
+          title: "Reference Data",
+          url: "/settings/references",
         }
       ],
     },

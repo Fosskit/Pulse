@@ -86,3 +86,12 @@ Route::middleware(['auth:api'])->prefix('references')->group(function () {
     Route::put('/{type}/{id}', [\App\Http\Controllers\ReferenceController::class, 'update']);
     Route::delete('/{type}/{id}', [\App\Http\Controllers\ReferenceController::class, 'destroy']);
 });
+
+// Patient routes
+Route::middleware(['auth:api'])->prefix('patients')->group(function () {
+    Route::get('/', \App\Actions\Patient\ListPatientsAction::class);
+    Route::get('/{patient}', \App\Actions\Patient\ShowPatientAction::class);
+    Route::post('/', \App\Actions\Patient\StorePatientAction::class);
+    Route::put('/{patient}', \App\Actions\Patient\UpdatePatientAction::class);
+    Route::delete('/{patient}', \App\Actions\Patient\DeletePatientAction::class);
+});
