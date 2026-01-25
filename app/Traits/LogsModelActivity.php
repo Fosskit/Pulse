@@ -19,6 +19,13 @@ trait LogsModelActivity
         static::deleted(function (Model $model) {
             self::logActivity('deleted', $model);
         });
+        
+        // Only register restored event if model uses SoftDeletes
+        if (in_array(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive(static::class))) {
+            static::restored(function (Model $model) {
+                self::logActivity('restored', $model);
+            });
+        }
     }
 
     protected static function logActivity(string $event, Model $model)

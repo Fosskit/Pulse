@@ -11,7 +11,10 @@ class UpdatePatientAction
 {
     public function __invoke(UpdatePatientRequest $request, Patient $patient): JsonResponse
     {
-        $patient->update($request->validated());
+        $data = $request->validated();
+        $data['updated_by'] = auth()->id();
+        
+        $patient->update($data);
         $patient->load(['nationality', 'occupation', 'maritalStatus']);
 
         return response()->json([

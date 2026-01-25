@@ -41,18 +41,26 @@ class RolePermissionSeeder extends Seeder
 
             // Dashboard permissions
             'dashboard.view',
+
+            // Patient permissions
+            'patients.view',
+            'patients.create',
+            'patients.update',
+            'patients.delete',
+            'patients.restore',
+            'patients.force-delete',
         ];
 
         foreach ($permissions as $permission) {
-            Permission::create(['name' => $permission, 'guard_name' => 'api']);
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'api']);
         }
 
         // Create roles and assign permissions
-        $superAdmin = Role::create(['name' => 'Super Admin', 'guard_name' => 'api']);
-        $superAdmin->givePermissionTo(Permission::where('guard_name', 'api')->get());
+        $superAdmin = Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'api']);
+        $superAdmin->syncPermissions(Permission::where('guard_name', 'api')->get());
 
-        $admin = Role::create(['name' => 'Admin', 'guard_name' => 'api']);
-        $admin->givePermissionTo(Permission::whereIn('name', [
+        $admin = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'api']);
+        $admin->syncPermissions(Permission::whereIn('name', [
             'users.view',
             'users.create',
             'users.update',
@@ -66,8 +74,8 @@ class RolePermissionSeeder extends Seeder
             'dashboard.view',
         ])->where('guard_name', 'api')->get());
 
-        $manager = Role::create(['name' => 'Manager', 'guard_name' => 'api']);
-        $manager->givePermissionTo(Permission::whereIn('name', [
+        $manager = Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'api']);
+        $manager->syncPermissions(Permission::whereIn('name', [
             'users.view',
             'users.update',
             'roles.view',
@@ -75,8 +83,8 @@ class RolePermissionSeeder extends Seeder
             'dashboard.view',
         ])->where('guard_name', 'api')->get());
 
-        $user = Role::create(['name' => 'User', 'guard_name' => 'api']);
-        $user->givePermissionTo(Permission::whereIn('name', [
+        $user = Role::firstOrCreate(['name' => 'User', 'guard_name' => 'api']);
+        $user->syncPermissions(Permission::whereIn('name', [
             'dashboard.view',
         ])->where('guard_name', 'api')->get());
     }

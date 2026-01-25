@@ -17,6 +17,7 @@ class ReferenceController extends Controller
         'nationalities' => \App\Models\Reference\Nationality::class,
         'occupations' => \App\Models\Reference\Occupation::class,
         'marital-statuses' => \App\Models\Reference\MaritalStatus::class,
+        'patient-statuses' => \App\Models\Reference\PatientStatus::class,
     ];
 
     protected function getModelClass(string $type): string

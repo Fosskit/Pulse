@@ -55,7 +55,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Badge } from '~/components/ui/badge'
-import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, RotateCcw, Trash, Search, X } from 'lucide-vue-next'
 import { DatePicker } from '~/components/ui/date-picker'
 import {
   Pagination,
@@ -65,6 +65,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '~/components/ui/pagination'
+
 
 definePageMeta({
   middleware: 'auth'
@@ -87,12 +88,17 @@ interface Patient {
   occupation?: { id: number; name: string }
   deceased: boolean | null
   deceased_at: string | null
+  status_id: number
+  status?: { id: number; name: string; color: string }
+  deleted_at?: string | null
+  deleted_by?: number | null
 }
 
 interface ReferenceData {
   id: number
   code: string
   name: string
+  color?: string
 }
 
 const api = useApi()
@@ -105,6 +111,7 @@ const isLoading = ref(false)
 const nationalities = ref<ReferenceData[]>([])
 const occupations = ref<ReferenceData[]>([])
 const maritalStatuses = ref<ReferenceData[]>([])
+const patientStatuses = ref<ReferenceData[]>([])
 
 // Pagination
 const currentPage = ref(1)
@@ -116,7 +123,13 @@ const perPage = ref(15)
 const isCreateDialogOpen = ref(false)
 const isEditDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
+const isForceDeleteDialogOpen = ref(false)
 const selectedPatient = ref<Patient | null>(null)
+
+// View mode and filters
+const viewMode = ref<'active' | 'trash'>('active')
+const statusFilter = ref<number | null>(null)
+const searchQuery = ref('')
 
 // Shared form schema - switches based on dialog type
 const createSchema = z.object({
@@ -124,7 +137,23 @@ const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   telephone: z.string().optional().or(z.literal('')),
   sex: z.enum(['M', 'F']),
-  birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal('')),
+  birthdate: z.string().optional().or(z.literal('')).refine((val) => {
+      if (!val || val === '') return true // Optional field
+      
+      // Validate date format
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false
+      
+      const date = new Date(val + 'T00:00:00')
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const minDate = new Date()
+      minDate.setFullYear(today.getFullYear() - 150)
+      minDate.setHours(0, 0, 0, 0)
+      
+      return date < today && date >= minDate
+    }, {
+      message: 'Birthdate must be between 1 day and 150 years ago'
+    }),
   multiple_birth: z.boolean().optional().default(false),
   nationality_id: z.union([z.string(), z.number()]).transform(val => {
     if (typeof val === 'string') return val ? parseInt(val) : 1
@@ -140,6 +169,10 @@ const createSchema = z.object({
   }).optional().nullable(),
   deceased: z.boolean().optional().default(false),
   deceased_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal('')),
+  status_id: z.union([z.string(), z.number()]).transform(val => {
+    if (typeof val === 'string') return val ? parseInt(val) : 1
+    return val || 1
+  }).optional().default(1),
 })
 
 const editSchema = z.object({
@@ -148,7 +181,23 @@ const editSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   telephone: z.string().optional().or(z.literal('')),
   sex: z.enum(['M', 'F', 'O', 'U']), // Keep all options for existing patients
-  birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal('')),
+  birthdate: z.string().optional().or(z.literal('')).refine((val) => {
+      if (!val || val === '') return true // Optional field
+      
+      // Validate date format
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return false
+      
+      const date = new Date(val + 'T00:00:00')
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const minDate = new Date()
+      minDate.setFullYear(today.getFullYear() - 150)
+      minDate.setHours(0, 0, 0, 0)
+      
+      return date < today && date >= minDate
+    }, {
+      message: 'Birthdate must be between 1 day and 150 years ago'
+    }),
   multiple_birth: z.boolean().optional().default(false),
   nationality_id: z.union([z.string(), z.number()]).transform(val => {
     if (typeof val === 'string') return val ? parseInt(val) : 1
@@ -164,6 +213,10 @@ const editSchema = z.object({
   }).optional().nullable(),
   deceased: z.boolean().optional().default(false),
   deceased_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional().or(z.literal('')),
+  status_id: z.union([z.string(), z.number()]).transform(val => {
+    if (typeof val === 'string') return val ? parseInt(val) : 1
+    return val || 1
+  }).optional().default(1),
 })
 
 // Single shared form context - switches validation based on active dialog
@@ -176,14 +229,16 @@ const { handleSubmit, setValues, resetForm, isSubmitting } = useForm({
 // Fetch reference data
 const fetchReferenceData = async () => {
   try {
-    const [natResponse, occResponse, marResponse] = await Promise.all([
+    const [natResponse, occResponse, marResponse, statusResponse] = await Promise.all([
       api.get<{ data: ReferenceData[] }>('/references/nationalities'),
       api.get<{ data: ReferenceData[] }>('/references/occupations'),
       api.get<{ data: ReferenceData[] }>('/references/marital-statuses'),
+      api.get<{ data: ReferenceData[] }>('/references/patient-statuses'),
     ])
     nationalities.value = natResponse.data
     occupations.value = occResponse.data
     maritalStatuses.value = marResponse.data
+    patientStatuses.value = statusResponse.data
   } catch (error: any) {
     console.error('Error fetching reference data:', error)
   }
@@ -193,6 +248,23 @@ const fetchReferenceData = async () => {
 const fetchPatients = async (page = 1) => {
   isLoading.value = true
   try {
+    const endpoint = viewMode.value === 'trash' ? '/patients/trash' : '/patients'
+    const params: Record<string, any> = {
+      per_page: perPage.value,
+      page,
+    }
+    
+    // Add status filter if selected
+    if (statusFilter.value) {
+      params.status_id = statusFilter.value
+    }
+    
+    // Add search query if provided
+    if (searchQuery.value.trim()) {
+      params.search = searchQuery.value.trim()
+    }
+    
+    const queryString = new URLSearchParams(params).toString()
     const response = await api.get<{
       data: Patient[]
       meta: {
@@ -201,7 +273,7 @@ const fetchPatients = async (page = 1) => {
         per_page: number
         total: number
       }
-    }>(`/patients?per_page=${perPage.value}&page=${page}`)
+    }>(`${endpoint}?${queryString}`)
 
     patients.value = response.data
     currentPage.value = response.meta.current_page
@@ -286,7 +358,7 @@ const deletePatient = async () => {
     
     const patientName = [selectedPatient.value.surname, selectedPatient.value.name].filter(Boolean).join(' ')
     toast.success('Patient deleted successfully', {
-      description: `${patientName} has been removed from the system.`
+      description: `${patientName} has been moved to trash.`
     })
     
     isDeleteDialogOpen.value = false
@@ -297,6 +369,52 @@ const deletePatient = async () => {
       description: errorHandler.formatError(error)
     })
   }
+}
+
+// Restore patient
+const restorePatient = async (patient: Patient) => {
+  try {
+    await api.post(`/patients/${patient.id}/restore`)
+    
+    const patientName = [patient.surname, patient.name].filter(Boolean).join(' ')
+    toast.success('Patient restored successfully', {
+      description: `${patientName} has been restored.`
+    })
+    
+    await fetchPatients(currentPage.value)
+  } catch (error: any) {
+    toast.error('Failed to restore patient', {
+      description: errorHandler.formatError(error)
+    })
+  }
+}
+
+// Force delete patient
+const forceDeletePatient = async () => {
+  if (!selectedPatient.value) return
+
+  try {
+    await api.delete(`/patients/${selectedPatient.value.id}/force`)
+    
+    const patientName = [selectedPatient.value.surname, selectedPatient.value.name].filter(Boolean).join(' ')
+    toast.success('Patient permanently deleted', {
+      description: `${patientName} has been permanently removed from the system.`
+    })
+    
+    isForceDeleteDialogOpen.value = false
+    selectedPatient.value = null
+    await fetchPatients(currentPage.value)
+  } catch (error: any) {
+    toast.error('Failed to permanently delete patient', {
+      description: errorHandler.formatError(error)
+    })
+  }
+}
+
+// Open force delete dialog
+const openForceDeleteDialog = (patient: Patient) => {
+  selectedPatient.value = patient
+  isForceDeleteDialogOpen.value = true
 }
 
 // Open create dialog
@@ -314,6 +432,7 @@ const openCreateDialog = () => {
     occupation_id: '',
     deceased: false,
     deceased_at: '',
+    status_id: '1', // Default to Active
   })
   isCreateDialogOpen.value = true
 }
@@ -334,6 +453,7 @@ const openEditDialog = (patient: Patient) => {
     occupation_id: patient.occupation_id?.toString() || '',
     deceased: patient.deceased || false,
     deceased_at: patient.deceased_at || '',
+    status_id: patient.status_id?.toString() || '1',
   })
   isEditDialogOpen.value = true
 }
@@ -435,6 +555,61 @@ const getSexLabel = (sex: string) => {
     default: return 'Unknown'
   }
 }
+
+// Get status badge color class
+const getStatusBadgeClass = (color: string | undefined) => {
+  if (!color) return 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+  
+  const colorMap: Record<string, string> = {
+    green: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800',
+    gray: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+    blue: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
+    yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800',
+    red: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800',
+  }
+  
+  return colorMap[color] || colorMap.gray
+}
+
+// Format deleted date
+const formatDeletedDate = (deletedAt: string | null) => {
+  if (!deletedAt) return '-'
+  const date = new Date(deletedAt)
+  return date.toLocaleDateString('en-GB', { 
+    day: '2-digit', 
+    month: 'short', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// Watch for view mode changes and reset to page 1
+watch(viewMode, () => {
+  currentPage.value = 1
+  fetchPatients(1)
+})
+
+// Watch for status filter changes
+watch(statusFilter, () => {
+  currentPage.value = 1
+  fetchPatients(1)
+})
+
+// Watch for search query changes with debounce
+let searchTimeout: NodeJS.Timeout
+watch(searchQuery, () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    currentPage.value = 1
+    fetchPatients(1)
+  }, 300)
+})
+
+// Clear search
+const clearSearch = () => {
+  searchQuery.value = ''
+}
 </script>
 
 <template>
@@ -452,17 +627,72 @@ const getSexLabel = (sex: string) => {
 
     <Card>
       <CardHeader>
-        <CardTitle>Patients</CardTitle>
-        <CardDescription>
-          A list of all patients in the system
-        </CardDescription>
+        <div class="flex items-center justify-between">
+          <div>
+            <CardTitle>{{ viewMode === 'active' ? 'Patients' : 'Trash' }}</CardTitle>
+            <CardDescription>
+              {{ viewMode === 'active' ? 'A list of all active patients in the system' : 'A list of deleted patients' }}
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
+        <!-- Filters and Search Bar -->
+        <div class="flex items-center gap-3 mb-4">
+          <!-- Search Input -->
+          <div class="relative flex-1 max-w-md">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              v-model="searchQuery"
+              type="text" 
+              placeholder="Search by name or code..." 
+              class="pl-9 pr-9"
+            />
+            <button 
+              v-if="searchQuery"
+              @click="clearSearch"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X class="h-4 w-4" />
+            </button>
+          </div>
+          
+          <!-- Status Filter -->
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-muted-foreground whitespace-nowrap">Status:</span>
+            <Select v-model="statusFilter">
+              <SelectTrigger class="w-[180px]">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="null">All Statuses</SelectItem>
+                <SelectItem v-for="status in patientStatuses" :key="status.id" :value="status.id">
+                  {{ status.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- Trash Toggle Button -->
+          <Button 
+            :variant="viewMode === 'trash' ? 'default' : 'outline'"
+            size="sm"
+            @click="viewMode = viewMode === 'active' ? 'trash' : 'active'"
+            class="gap-2"
+          >
+            <Trash class="h-4 w-4" />
+            <span v-if="viewMode === 'trash'">Back to Active</span>
+            <span v-else>Trash</span>
+          </Button>
+        </div>
+
         <div v-if="isLoading" class="text-center py-8">
           <p class="text-muted-foreground">Loading patients...</p>
         </div>
         <div v-else-if="patients.length === 0" class="text-center py-8">
-          <p class="text-muted-foreground">No patients found</p>
+          <p class="text-muted-foreground">
+            {{ viewMode === 'active' ? 'No patients found' : 'No deleted patients' }}
+          </p>
         </div>
         <div v-else class="rounded-lg border bg-card">
           <Table>
@@ -473,7 +703,9 @@ const getSexLabel = (sex: string) => {
                 <TableHead class="w-[100px] font-semibold">Sex</TableHead>
                 <TableHead class="w-[130px] font-semibold">Birth Date</TableHead>
                 <TableHead class="w-[90px] font-semibold">Age</TableHead>
-                <TableHead class="w-[140px] font-semibold">Contact</TableHead>
+                <TableHead class="w-[120px] font-semibold">Status</TableHead>
+                <TableHead v-if="viewMode === 'trash'" class="w-[180px] font-semibold">Deleted</TableHead>
+                <TableHead v-else class="w-[140px] font-semibold">Contact</TableHead>
                 <TableHead class="text-right w-[120px] font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -537,6 +769,19 @@ const getSexLabel = (sex: string) => {
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  <Badge 
+                    :class="getStatusBadgeClass(patient.status?.color)"
+                    class="font-medium"
+                  >
+                    {{ patient.status?.name || 'Unknown' }}
+                  </Badge>
+                </TableCell>
+                <TableCell v-if="viewMode === 'trash'">
+                  <div class="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                    <span>{{ formatDeletedDate(patient.deleted_at) }}</span>
+                  </div>
+                </TableCell>
+                <TableCell v-else>
                   <div v-if="patient.telephone" class="flex items-center gap-1.5 text-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
@@ -546,7 +791,8 @@ const getSexLabel = (sex: string) => {
                   <span v-else class="text-xs text-muted-foreground">No contact</span>
                 </TableCell>
                 <TableCell class="text-right">
-                  <div class="flex justify-end gap-1.5">
+                  <!-- Active view actions -->
+                  <div v-if="viewMode === 'active'" class="flex justify-end gap-1.5">
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -560,6 +806,28 @@ const getSexLabel = (sex: string) => {
                       size="sm" 
                       @click="openDeleteDialog(patient)"
                       class="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <!-- Trash view actions -->
+                  <div v-else class="flex justify-end gap-1.5">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      @click="restorePatient(patient)"
+                      class="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700 transition-colors"
+                      title="Restore patient"
+                    >
+                      <RotateCcw class="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      @click="openForceDeleteDialog(patient)"
+                      class="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      title="Delete permanently"
                     >
                       <Trash2 class="h-4 w-4" />
                     </Button>
@@ -746,6 +1014,25 @@ const getSexLabel = (sex: string) => {
             </FormField>
           </div>
 
+          <FormField v-slot="{ componentField }" name="status_id">
+            <FormItem>
+              <FormLabel>Patient Status</FormLabel>
+              <Select v-bind="componentField">
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select patient status" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem v-for="status in patientStatuses" :key="status.id" :value="status.id.toString()">
+                    {{ status.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
           <DialogFooter>
             <Button type="button" variant="outline" @click="isCreateDialogOpen = false; resetForm()">
               Cancel
@@ -908,6 +1195,25 @@ const getSexLabel = (sex: string) => {
             </FormField>
           </div>
 
+          <FormField v-slot="{ componentField }" name="status_id">
+            <FormItem>
+              <FormLabel>Patient Status</FormLabel>
+              <Select v-bind="componentField">
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select patient status" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem v-for="status in patientStatuses" :key="status.id" :value="status.id.toString()">
+                    {{ status.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
           <DialogFooter>
             <Button type="button" variant="outline" @click="isEditDialogOpen = false; resetForm()">
               Cancel
@@ -925,16 +1231,37 @@ const getSexLabel = (sex: string) => {
     <AlertDialog v-model:open="isDeleteDialogOpen">
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+          <AlertDialogTitle>Move to Trash?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the patient
-            <strong>{{ [selectedPatient?.surname, selectedPatient?.name].filter(Boolean).join(' ') }}</strong>.
+            This will move the patient
+            <strong>{{ [selectedPatient?.surname, selectedPatient?.name].filter(Boolean).join(' ') }}</strong>
+            to trash. You can restore it later from the Trash tab.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction @click="deletePatient" class="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-            Delete
+            Move to Trash
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Force Delete Patient Dialog -->
+    <AlertDialog v-model:open="isForceDeleteDialogOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Permanently Delete Patient?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action <strong>cannot be undone</strong>. This will permanently delete the patient
+            <strong>{{ [selectedPatient?.surname, selectedPatient?.name].filter(Boolean).join(' ') }}</strong>
+            from the system. All associated data will be lost forever.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction @click="forceDeletePatient" class="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            Delete Permanently
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

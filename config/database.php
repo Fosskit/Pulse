@@ -114,7 +114,7 @@ return [
         ],
 
         'logging' => [
-            'driver' => 'mariadb',
+            'driver' => env('DB_CONNECTION_LOG', 'mariadb'),
             'url' => env('DB_URL_LOG'),
             'host' => env('DB_HOST_LOG', '127.0.0.1'),
             'port' => env('DB_PORT_LOG', '3306'),

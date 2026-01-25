@@ -6,14 +6,15 @@ use App\Http\Resources\PatientResource;
 use App\Models\Patient;
 use Illuminate\Http\JsonResponse;
 
-class ListPatientsAction
+class ListTrashedPatientsAction
 {
     public function __invoke(): JsonResponse
     {
         $perPage = request('per_page', 15);
         
-        // Build query
-        $query = Patient::with(['nationality', 'occupation', 'maritalStatus', 'status']);
+        // Build query for trashed patients
+        $query = Patient::onlyTrashed()
+            ->with(['nationality', 'occupation', 'maritalStatus', 'status']);
         
         // Apply status filter if provided
         if (request()->has('status_id') && request('status_id') !== null) {
@@ -32,7 +33,7 @@ class ListPatientsAction
             });
         }
         
-        $patients = $query->orderBy('created_at', 'desc')
+        $patients = $query->orderBy('deleted_at', 'desc')
             ->paginate($perPage);
 
         return response()->json([

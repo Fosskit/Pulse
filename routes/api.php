@@ -90,6 +90,9 @@ Route::middleware(['auth:api'])->prefix('references')->group(function () {
 // Patient routes
 Route::middleware(['auth:api'])->prefix('patients')->group(function () {
     Route::get('/', \App\Actions\Patient\ListPatientsAction::class);
+    Route::get('/trash', \App\Actions\Patient\ListTrashedPatientsAction::class);
+    Route::post('/{id}/restore', \App\Actions\Patient\RestorePatientAction::class);
+    Route::delete('/{id}/force', \App\Actions\Patient\ForceDeletePatientAction::class);
     Route::get('/{patient}', \App\Actions\Patient\ShowPatientAction::class);
     Route::post('/', \App\Actions\Patient\StorePatientAction::class);
     Route::put('/{patient}', \App\Actions\Patient\UpdatePatientAction::class);

@@ -374,3 +374,261 @@ public function __invoke(StorePatientRequest $request, CodeGeneratorService $cod
 2. Inject `CodeGeneratorService` in Store action
 3. Call `$codeGenerator->generate('entity-name')` if code is empty
 4. Frontend will auto-generate on create (leave code field empty)
+
+## Soft Delete & Trash Management System
+
+This project implements a comprehensive soft delete system with trash management, audit trails, and status tracking for entities like patients.
+
+### Backend Implementation
+
+#### Soft Deletes with Audit Trail
+
+Models use Laravel's `SoftDeletes` trait combined with audit fields to track record lifecycle:
+
+```php
+use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\LogsModelActivity;
+
+class Patient extends Model
+{
+    use SoftDeletes, LogsModelActivity;
+    
+    protected $fillable = [
+        // ... other fields
+        'status_id',
+        'created_by',
+        'updated_by',
+        'deleted_by',
+    ];
+}
+```
+
+**Audit Fields:**
+- `created_by` - User ID who created the record
+- `updated_by` - User ID who last updated the record
+- `deleted_by` - User ID who soft-deleted the record
+- `deleted_at` - Timestamp of soft deletion (from SoftDeletes trait)
+
+#### Trash Management Actions
+
+**ListTrashedPatientsAction** (`app/Actions/Patient/ListTrashedPatientsAction.php`):
+- Retrieves soft-deleted records using `Patient::onlyTrashed()`
+- Supports pagination and status filtering
+- Orders by `deleted_at` descending (most recently deleted first)
+- Returns paginated results with relationships loaded
+
+```php
+$query = Patient::onlyTrashed()
+    ->with(['nationality', 'occupation', 'maritalStatus', 'status']);
+
+if (request()->has('status_id')) {
+    $query->where('status_id', request('status_id'));
+}
+
+$patients = $query->orderBy('deleted_at', 'desc')->paginate($perPage);
+```
+
+**RestorePatientAction** (`app/Actions/Patient/RestorePatientAction.php`):
+- Restores soft-deleted records back to active state
+- Clears `deleted_by` field after restoration
+- Triggers activity logging via `LogsModelActivity` trait
+- Returns restored record with relationships
+
+```php
+$patient = Patient::onlyTrashed()->findOrFail($id);
+$patient->restore();
+$patient->deleted_by = null;
+$patient->save();
+```
+
+**ForceDeletePatientAction** (`app/Actions/Patient/ForceDeletePatientAction.php`):
+- Permanently deletes soft-deleted records (cannot be undone)
+- Only works on already trashed records (security measure)
+- Manually logs the permanent deletion before removing record
+- Stores patient info before deletion for audit log
+
+```php
+$patient = Patient::onlyTrashed()->findOrFail($id);
+
+$activityLogService->log(
+    action: 'force_deleted',
+    model: 'Patient',
+    modelId: $id,
+    description: "Patient permanently deleted: {$patientCode} - {$patientName}"
+);
+
+$patient->forceDelete();
+```
+
+**DeletePatientAction** (`app/Actions/Patient/DeletePatientAction.php`):
+- Performs soft delete (sets `deleted_at` timestamp)
+- Records `deleted_by` user ID before deletion
+- Preserves record in database for potential restoration
+- Activity logging handled automatically by trait
+
+```php
+$patient->deleted_by = auth()->id();
+$patient->save();
+$patient->delete();
+```
+
+#### API Routes
+
+```php
+Route::middleware(['auth:api'])->prefix('patients')->group(function () {
+    Route::get('/trash', ListTrashedPatientsAction::class);
+    Route::post('/{id}/restore', RestorePatientAction::class);
+    Route::delete('/{id}/force', ForceDeletePatientAction::class);
+    Route::delete('/{patient}', DeletePatientAction::class); // Soft delete
+});
+```
+
+**Note:** No specific permissions are enforced on trash routes in current implementation. Consider adding:
+- `patients.restore` - For restore operations
+- `patients.force-delete` - For permanent deletion
+
+#### Status Management System
+
+Patient records support lifecycle status tracking via the `patient_statuses` reference table:
+
+**PatientStatus Model** (`app/Models/Reference/PatientStatus.php`):
+- Extends `BaseReference` for consistent reference data structure
+- Includes `color` field for UI badge styling
+
+**Available Statuses:**
+1. **Active** (ID: 1, Color: green) - Default for new patients actively receiving care
+2. **Inactive** (ID: 2, Color: gray) - Patient no longer visits facility
+3. **Archived** (ID: 3, Color: blue) - Historical records, read-only
+4. **Pending Verification** (ID: 4, Color: yellow) - New registrations awaiting verification
+5. **Blocked** (ID: 5, Color: red) - Flagged for review or restricted access
+
+**Status Filtering:**
+```php
+// In Patient model
+public function scopeWithStatus($query, $statusId)
+{
+    return $query->where('status_id', $statusId);
+}
+
+// Usage in actions
+Patient::withStatus(1)->get(); // Get active patients
+```
+
+**Seeding Statuses:**
+Run `PatientStatusSeeder` to populate default statuses. Status data is managed via the generic reference CRUD system at `/api/references/patient-statuses`.
+
+### Frontend Implementation
+
+#### Tab-Based View Switching
+
+Patient list page uses tabs to switch between active and trashed records:
+
+```typescript
+const viewMode = ref<'active' | 'trash'>('active')
+
+const fetchPatients = async (page = 1) => {
+  const endpoint = viewMode.value === 'trash' 
+    ? '/patients/trash' 
+    : '/patients'
+  
+  const params = {
+    per_page: perPage.value,
+    page,
+    ...(statusFilter.value && { status_id: statusFilter.value })
+  }
+  
+  const response = await api.get(endpoint, { params })
+  // Update state...
+}
+```
+
+**UI Structure:**
+- **Active Patients Tab**: Shows non-deleted records with delete button (soft delete)
+- **Trash Tab**: Shows soft-deleted records with restore and force delete buttons
+
+#### Status Management UI
+
+**Status Badge Display:**
+- Color-coded badges based on `color` field from patient_statuses
+- Displayed in patient list table for both active and trash views
+- Uses shadcn-vue Badge component with dynamic variant
+
+**Status Filtering:**
+- Dropdown above patient table to filter by status
+- "All Statuses" option to clear filter
+- Applies to both active and trash views
+- Fetches status options from `/api/references/patient-statuses`
+
+**Status Selection in Forms:**
+- Status dropdown in create/edit dialogs
+- Defaults to "Active" (status_id: 1) for new patients
+- Allows status changes during patient updates
+
+#### Trash Management Actions
+
+**Restore Patient:**
+```typescript
+const restorePatient = async (patient: Patient) => {
+  await api.post(`/patients/${patient.id}/restore`)
+  toast.success('Patient restored successfully')
+  await fetchPatients(currentPage.value)
+}
+```
+
+**Force Delete Patient:**
+```typescript
+const forceDeletePatient = async (patient: Patient) => {
+  // Show confirmation AlertDialog first
+  await api.delete(`/patients/${patient.id}/force`)
+  toast.success('Patient permanently deleted')
+  await fetchPatients(currentPage.value)
+}
+```
+
+**Soft Delete Patient:**
+```typescript
+const deletePatient = async (patient: Patient) => {
+  await api.delete(`/patients/${patient.id}`)
+  toast.success('Patient moved to trash')
+  await fetchPatients(currentPage.value)
+}
+```
+
+#### UI Components Used
+
+- **Tabs** (shadcn-vue): Switch between Active/Trash views
+- **Badge** (shadcn-vue): Display color-coded status
+- **Select** (shadcn-vue): Status filter dropdown
+- **AlertDialog** (shadcn-vue): Confirmation for force delete
+- **Sonner Toast**: Success/error notifications
+
+### Adding Trash System to New Entities
+
+**Backend Steps:**
+1. Add `SoftDeletes` trait to model
+2. Add audit fields to fillable: `created_by`, `updated_by`, `deleted_by`
+3. Create trash management actions (List, Restore, ForceDelete)
+4. Update Store action to set `created_by = auth()->id()`
+5. Update Update action to set `updated_by = auth()->id()`
+6. Update Delete action to set `deleted_by` before calling `delete()`
+7. Add trash routes: `/entity/trash`, `/entity/{id}/restore`, `/entity/{id}/force`
+
+**Frontend Steps:**
+1. Add `viewMode` state for tab switching
+2. Add tabs component with Active/Trash views
+3. Update fetch function to use correct endpoint based on viewMode
+4. Add restore button in trash view
+5. Add force delete button with confirmation dialog in trash view
+6. Update delete button to perform soft delete in active view
+7. Add appropriate toast notifications
+
+### Best Practices
+
+1. **Always set audit fields** - Use `auth()->id()` to populate created_by, updated_by, deleted_by
+2. **Force delete only trashed records** - Use `onlyTrashed()` in ForceDeleteAction for safety
+3. **Clear deleted_by on restore** - Set to null when restoring records
+4. **Manual logging for force delete** - Activity trait doesn't catch forceDelete, log manually
+5. **Confirmation for permanent deletion** - Always show AlertDialog before force delete
+6. **Order trash by deleted_at desc** - Show most recently deleted first
+7. **Load relationships in trash view** - Include necessary relationships for display
+8. **Support status filtering in trash** - Allow filtering trashed records by status

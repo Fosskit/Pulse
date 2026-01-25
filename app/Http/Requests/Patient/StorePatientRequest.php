@@ -19,13 +19,27 @@ class StorePatientRequest extends FormRequest
             'name' => 'nullable|string|max:191',
             'telephone' => 'nullable|string|max:191',
             'sex' => 'required|in:M,F,O,U',
-            'birthdate' => 'nullable|date',
+            'birthdate' => [
+                'nullable',
+                'date',
+                'before:today',
+                'after_or_equal:' . now()->subYears(150)->format('Y-m-d'),
+            ],
             'multiple_birth' => 'nullable|boolean',
             'nationality_id' => 'required|integer|exists:nationalities,id',
             'marital_status_id' => 'nullable|integer|exists:marital_statuses,id',
             'occupation_id' => 'nullable|integer|exists:occupations,id',
             'deceased' => 'nullable|boolean',
             'deceased_at' => 'nullable|date|required_if:deceased,true',
+            'status_id' => 'nullable|integer|exists:patient_statuses,id',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'birthdate.before' => 'Birthdate must be in the past.',
+            'birthdate.after_or_equal' => 'Birthdate cannot be more than 150 years ago.',
         ];
     }
 }

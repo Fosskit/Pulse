@@ -19,6 +19,10 @@ class StorePatientAction
             $data['code'] = $codeGenerator->generate('patient');
         }
         
+        // Set audit trail and default status
+        $data['created_by'] = auth()->id();
+        $data['status_id'] ??= 1; // Default to Active
+        
         $patient = Patient::create($data);
         $patient->load(['nationality', 'occupation', 'maritalStatus']);
 
